@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Notepad - Half Inch Scrollbar & Handwriting</title>
+
+  <!-- PWA: Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0c1a16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Notepad">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- Tesseract.js (OCR Engine) -->
+  <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+  
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: #0c1a16;
+      color: #f2f5f3;
+      font-family: "Segoe UI", "Noto Naskh Arabic", sans-serif;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #16241f;
+      margin: 12px 14px 8px;
+      padding: 10px 16px;
+      border-radius: 28px;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      position: relative;
+      z-index: 10;
+    }
+    .top-bar .icon-btn { background: none; border: none; color: #8fa39a; font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 6px; }
+    .top-bar .icon-btn.close { margin-inline-start: auto; }
+    .top-bar .input-wrap { flex: 1; min-width: 0; }
+    #titleLabel { font-size: 20px; font-weight: 600; color: #f2f5f3; display: inline-block; padding: 0 4px; }
+    .top-bar .icon-btn.on { color: #35d68f; }
+    .handwrite-toggle {
+      background: #1c2b25;
+      border: 1px solid #2a3f36;
+      color: #8fa39a;
+      border-radius: 30px;
+      padding: 4px 14px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.15s;
+    }
+    .handwrite-toggle.on { background: #2a3f36; border-color: #35d68f; color: #35d68f; }
+    .handwrite-toggle svg { width: 20px; height: 20px; fill: currentColor; }
+    
+    .note-area { flex: 1; margin: 0 14px 6px; min-height: 0; display: flex; position: relative; }
+    #noteInput {
+      width: 100%;
+      background: #16241f;
+      border: none;
+      border-radius: 18px;
+      outline: none;
+      resize: none;
+      overflow-y: auto;
+      color: #f2f5f3;
+      font-family: "Scheherazade New", serif;
+      font-size: 44px;
+      line-height: 1.7;
+      padding: 16px 20px;
+      caret-color: #35d68f;
+      direction: rtl;
+      text-align: right;
+      font-weight: 500;
+    }
+    .custom-cursor {
+      position: absolute;
+      width: 3px;
+      height: 54px;
+      background: #35d68f;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 10;
+      opacity: 1;
+      animation: blink 1s step-end infinite;
+      display: block;
+      box-shadow: 0 0 12px #35d68f88;
+    }
+    @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.1; } }
+    .status-bar { text-align: center; color: #5d7268; font-size: 14px; padding: 2px 0 6px; flex-shrink: 0; }
+
+    /* HANDWRITING CONTAINER */
+    #handwriteContainer {
+      display: none;
+      flex: 1;
+      width: 100%;
+      background: #0c1a16;
+      touch-action: none;
+      z-index: 4;
+      cursor: crosshair;
+      margin: 0;
+      padding: 10px 14px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 200px;
+      position: relative;
+      direction: ltr; 
+    }
+    #handwriteContainer > * {
+      direction: rtl;
+    }
+    #handwriteContainer.active { display: block; }
+    #handwriteCanvas {
+      width: 100%;
+      display: block;
+      background: #0c1a16;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    
+    /* ⭐ হাফ ইঞ্চি (প্রায় ৪৮ পিক্সেল) মোটা স্ক্রলবার */
+    #handwriteContainer::-webkit-scrollbar {
+      width: 48px; /* ০.৫ ইঞ্চি = ৪৮ পিক্সেল */
+      background: #0c1a16;
+    }
+    #handwriteContainer::-webkit-scrollbar-track {
+      background: #0c1a16;
+      border-radius: 24px;
+    }
+    #handwriteContainer::-webkit-scrollbar-thumb {
+      background: #35d68f;
+      border-radius: 24px;
+      border: 6px solid #0c1a16; /* ভেতরে ফাঁকা অংশ */
+      min-height: 40px;
+    }
+    #handwriteContainer::-webkit-scrollbar-thumb:hover {
+      background: #4be6a3;
+    }
+    /* Firefox */
+    #handwriteContainer {
+      scrollbar-width: auto;
+      scrollbar-color: #35d68f #0c1a16;
+    }
+
+    body.hw-active .note-area { display: none !important; }
+    body.hw-active .status-bar { display: none !important; }
+    body.hw-active .keyboard-wrap { display: none !important; }
+
+    .hw-toolbar {
+      position: fixed;
+      bottom: 30px;
+      left: 0;
+      width: 100%;
+      display: none;
+      justify-content: center;
+      gap: 20px;
+      padding: 10px;
+      z-index: 1001;
+      background: transparent;
+      pointer-events: none;
+    }
+    .hw-toolbar.active { display: flex; }
+    
+    .hw-btn-group {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 500px;
+      pointer-events: auto;
+    }
+    
+    .hw-toolbar button {
+      background: #1c2b25;
+      border: none;
+      border-radius: 40px;
+      padding: 12px 28px;
+      color: #f2f5f3;
+      font-size: 20px;
+      font-weight: 600;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      cursor: pointer;
+      transition: 0.1s;
+      min-width: 80px;
+      flex: 1;
+    }
+    .hw-toolbar button:active { transform: scale(0.94); background: #2a3f36; }
+    .hw-toolbar .clear-hw { background: #4a2e2e; color: #f2a0a0; }
+    .hw-toolbar .delete-word-hw { background: #802020; color: #ffffff; font-weight: bold; }
+    .hw-toolbar .scroll-down-hw { background: #1a4060; color: #ffffff; font-weight: bold; }
+    .hw-toolbar .close-hw { background: #2a3f36; }
+    
+    /* KEYBOARD */
+    .keyboard-wrap {
+      display: flex;
+      flex-direction: column;
+      background: #111d18;
+      border-top: 1px solid #1c2b25;
+      flex-shrink: 0;
+      touch-action: manipulation;
+      height: auto;
+      min-height: 100px;
+      max-height: 75vh;
+      position: relative;
+      width: 100%;
+    }
+    .keyboard-resize-bar {
+      width: 100%;
+      height: 8px;
+      background: #1c2b25;
+      cursor: row-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #5d7268;
+      font-size: 12px;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+    .keyboard-resize-bar:hover { background: #2a3f36; }
+    
+    .font-control {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 5px 10px;
+      background: #16241f;
+      border-bottom: 1px solid #1c2b25;
+      flex-shrink: 0;
+    }
+    .font-control label { font-size: 13px; color: #8fa39a; font-weight: bold; min-width: 30px; }
+    .font-control input[type="range"] {
+      width: 120px;
+      height: 3px;
+      background: #2a3f36;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      border-radius: 5px;
+    }
+    .font-control input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #35d68f;
+      cursor: pointer;
+    }
+    .font-control input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #35d68f;
+      cursor: pointer;
+    }
+    .font-control span { font-size: 13px; color: #f2f5f3; min-width: 25px; text-align: center; }
+
+    .keyboard {
+      flex: 1;
+      padding: 8px 6px 10px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+    
+    .row { 
+      display: flex; 
+      justify-content: center; 
+      gap: 3px; 
+      margin-bottom: 5px; 
+      flex-wrap: wrap; 
+      width: 100%;
+    }
+    .number-row-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 6px;
+    }
+    .number-row {
+      display: flex;
+      justify-content: center;
+      gap: 2px;
+      width: 100%;
+    }
+    .number-key {
+      background: transparent;
+      color: #5d7268;
+      font-size: 12px;
+      font-weight: bold;
+      height: 20px;
+      flex: 0 0 36px;
+      max-width: 42px;
+      min-width: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .number-key:active { color: #35d68f; }
+    
+    .key {
+      background: #1c2b25;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f2f5f3;
+      font-size: 24px;
+      height: 44px;
+      flex: 1 0 30px;
+      min-width: 32px;
+      max-width: 48px;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.4);
+      transition: background 0.06s ease, transform 0.05s ease;
+      touch-action: manipulation;
+    }
+    .key:active, .key.active { background: #2a3f36; transform: scale(0.94); }
+    .key.wide { max-width: 75px; font-size: 17px; color: #8fa39a; min-width: 50px; flex: 0 1 70px;}
+    .key.diacritic { font-size: 26px; font-weight: 700; color: #f2f5f3; max-width: 40px; flex: 0 1 32px;}
+    .key.space { max-width: none; flex: 4 1 150px !important; font-size: 15px; color: #8fa39a; }
+    .key.enter { max-width: 60px; background: #35d68f; color: #04140c; font-weight: 700; font-size: 15px; flex: 0 1 55px;}
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <button class="icon-btn" id="backBtn">→</button>
+    <div class="input-wrap"><span id="titleLabel"></span></div>
+    <button class="handwrite-toggle" id="hwToggle">
+      <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      <span>يدوي</span>
+    </button>
+    <button class="icon-btn" id="kbToggleBtn">🌐</button>
+    <button class="icon-btn" id="saveBtn">💾</button>
+    <button class="icon-btn close" id="clearBtn">🗑</button>
+  </div>
+
+  <!-- NORMAL AREA -->
+  <div class="note-area" id="noteArea">
+    <textarea id="noteInput" placeholder="" inputmode="none"></textarea>
+    <div class="custom-cursor" id="customCursor"></div>
+  </div>
+  <div class="status-bar" id="statusMsg">جاهز للكتابة</div>
+
+  <!-- HANDWRITING CANVAS CONTAINER -->
+  <div id="handwriteContainer">
+    <canvas id="handwriteCanvas"></canvas>
+  </div>
+
+  <!-- CANVAS TOOLBAR -->
+  <div class="hw-toolbar" id="hwToolbar">
+    <div class="hw-btn-group">
+      <button class="clear-hw" id="hwClear">Clear</button>
+      <button class="delete-word-hw" id="btnDeleteLast">X</button>
+      <button class="scroll-down-hw" id="btnScrollNow">↓</button>
+      <button class="close-hw" id="hwClose">Close</button>
+    </div>
+  </div>
+
+  <!-- KEYBOARD -->
+  <div class="keyboard-wrap" id="keyboardWrap">
+    <div class="keyboard-resize-bar" id="keyboardResizeBar">↕</div>
+    
+    <div class="font-control">
+      <label>Size</label>
+      <input type="range" id="fontSlider" min="14" max="40" value="24" step="1">
+      <span id="fontValueDisplay">24px</span>
+    </div>
+
+    <div class="keyboard" id="keyboard">
+      <div class="number-row-wrap">
+        <div class="number-row" id="engNumberRow">
+          <div class="number-key" data-num="1">1</div>
+          <div class="number-key" data-num="2">2</div>
+          <div class="number-key" data-num="3">3</div>
+          <div class="number-key" data-num="4">4</div>
+          <div class="number-key" data-num="5">5</div>
+          <div class="number-key" data-num="6">6</div>
+          <div class="number-key" data-num="7">7</div>
+          <div class="number-key" data-num="8">8</div>
+          <div class="number-key" data-num="9">9</div>
+          <div class="number-key" data-num="10">10</div>
+        </div>
+        <div class="number-row" id="arabNumberRow">
+          <div class="number-key" data-num="١">١</div>
+          <div class="number-key" data-num="٢">٢</div>
+          <div class="number-key" data-num="٣">٣</div>
+          <div class="number-key" data-num="٤">٤</div>
+          <div class="number-key" data-num="٥">٥</div>
+          <div class="number-key" data-num="٦">٦</div>
+          <div class="number-key" data-num="٧">٧</div>
+          <div class="number-key" data-num="٨">٨</div>
+          <div class="number-key" data-num="٩">٩</div>
+          <div class="number-key" data-num="١٠">١٠</div>
+        </div>
+      </div>
+
+      <div class="row" data-row="1"></div>
+      <div class="row" data-row="2"></div>
+      <div class="row" data-row="3"></div>
+      <div class="row" data-row="4"></div>
+      <div class="row" data-row="5"></div>
+      <div class="row" data-row="6"></div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const storage = {
+        _data: {},
+        get(key) { return Promise.resolve({ value: this._data[key] || '' }); },
+        set(key, value) { this._data[key] = value; return Promise.resolve(true); },
+        delete(key) { delete this._data[key]; return Promise.resolve(true); }
+      };
+      window.storage = storage;
+
+      const input = document.getElementById('noteInput');
+      const statusMsg = document.getElementById('statusMsg');
+      const saveBtn = document.getElementById('saveBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const kbToggleBtn = document.getElementById('kbToggleBtn');
+      const keyboardWrap = document.getElementById('keyboardWrap');
+      const keyboardPanel = document.getElementById('keyboard');
+      const resizeBar = document.getElementById('keyboardResizeBar');
+      const hwToggle = document.getElementById('hwToggle');
+      
+      const canvas = document.getElementById('handwriteCanvas');
+      const container = document.getElementById('handwriteContainer');
+      const hwToolbar = document.getElementById('hwToolbar');
+      
+      const hwClear = document.getElementById('hwClear');
+      const hwClose = document.getElementById('hwClose');
+      const btnScrollNow = document.getElementById('btnScrollNow');
+      const btnDeleteLast = document.getElementById('btnDeleteLast');
+      
+      const customCursor = document.getElementById('customCursor');
+      const noteArea = document.getElementById('noteArea');
+
+      const fontSlider = document.getElementById('fontSlider');
+      const fontValueDisplay = document.getElementById('fontValueDisplay');
+
+      const NOTE_KEY = 'notepad:content';
+      let englishMode = false;
+      let handwritingActive = false;
+      let cursorInterval = null;
+      let recognizer = null;
+
+      function updateCustomCursor() {
+        if (!input) return;
+        const rect = input.getBoundingClientRect();
+        const text = input.value;
+        const start = input.selectionStart || 0;
+        const temp = document.createElement('span');
+        temp.style.position = 'absolute';
+        temp.style.visibility = 'hidden';
+        temp.style.whiteSpace = 'pre-wrap';
+        temp.style.font = getComputedStyle(input).font;
+        temp.style.direction = 'rtl';
+        temp.style.textAlign = 'right';
+        temp.style.padding = getComputedStyle(input).padding;
+        temp.style.lineHeight = getComputedStyle(input).lineHeight;
+        temp.style.width = rect.width + 'px';
+        const before = text.slice(0, start);
+        temp.textContent = before + '|';
+        document.body.appendChild(temp);
+        const range = document.createRange();
+        const textNode = temp.firstChild;
+        if (textNode) {
+          try {
+            const pipeIndex = temp.textContent.indexOf('|');
+            range.setStart(textNode, pipeIndex);
+            range.setEnd(textNode, pipeIndex + 1);
+            const rects = range.getClientRects();
+            if (rects.length > 0) {
+              const r = rects[0];
+              const areaRect = noteArea.getBoundingClientRect();
+              const left = r.right - 2 - areaRect.left;
+              const top = r.top - areaRect.top + 4;
+              customCursor.style.left = left + 'px';
+              customCursor.style.top = top + 'px';
+              customCursor.style.height = (r.height - 4) + 'px';
+              customCursor.classList.add('active');
+            }
+          } catch (e) {}
+        }
+        document.body.removeChild(temp);
+      }
+
+      function startCursorUpdate() {
+        if (cursorInterval) clearInterval(cursorInterval);
+        cursorInterval = setInterval(() => {
+          if (!englishMode && !handwritingActive) updateCustomCursor();
+          else customCursor.classList.remove('active');
+        }, 300);
+        input.addEventListener('input', updateCustomCursor);
+        input.addEventListener('click', updateCustomCursor);
+        input.addEventListener('keyup', updateCustomCursor);
+        input.addEventListener('selectionchange', updateCustomCursor);
+        setTimeout(updateCustomCursor, 100);
+      }
+
+      (async function load() {
+        try {
+          const res = await storage.get(NOTE_KEY);
+          if (res && res.value) input.value = res.value;
+          statusMsg.textContent = 'جاهز للكتابة';
+        } catch (_) { statusMsg.textContent = 'جاهز للكتابة'; }
+        startCursorUpdate();
+      })();
+
+      function scheduleAutosave() {
+        statusMsg.textContent = 'جارٍ الحفظ...';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveNote, 600);
+      }
+      let saveTimer = null;
+      async function saveNote() {
+        try { await storage.set(NOTE_KEY, input.value); statusMsg.textContent = 'تم الحفظ ✓'; } catch (_) { statusMsg.textContent = 'تعذر الحفظ'; }
+      }
+      saveBtn.addEventListener('click', saveNote);
+      clearBtn.addEventListener('click', async () => {
+        input.value = '';
+        await storage.delete(NOTE_KEY);
+        statusMsg.textContent = 'تم المسح';
+        input.focus();
+        updateCustomCursor();
+      });
+
+      kbToggleBtn.addEventListener('click', () => {
+        englishMode = !englishMode;
+        if (englishMode) {
+          keyboardWrap.classList.add('hidden'); kbToggleBtn.classList.add('on');
+          input.removeAttribute('readonly'); input.focus();
+          customCursor.classList.remove('active');
+          if (handwritingActive) closeHandwriting();
+        } else {
+          keyboardWrap.classList.remove('hidden'); kbToggleBtn.classList.remove('on');
+          input.setAttribute('readonly', 'true'); input.blur();
+          customCursor.classList.add('active'); updateCustomCursor();
+        }
+      });
+
+      // ================= EXACT LAYOUT =================
+      const rows = [
+        ['ق','و','ع','غ','ر','ت','ي','ث','ء','ه','ف'],
+        ['ا','س','ش','د','ذ','ل','ك','ج','ح','خ','ظ'],
+        ['⇧','ط','ز','و','ب','ن','م','ص','ض','⌫'],
+        ['َ','.','فراغ','⏎'],
+        ['ِ','ً','ٍ','ـ','،','؛','؟'],
+        ['ّ','ُ','ْ','ٌ','ٰ','ٖ','ٓ']
+      ];
+      const diacritics = new Set(['ّ','ُ','ْ','ٌ','ٓ','َ','ِ','ً','ٍ','ٰ','ٖ']);
+      const rowEls = document.querySelectorAll('.row');
+      
+      function buildRow(container, keys) {
+        keys.forEach(k => {
+          const btn = document.createElement('div');
+          btn.className = 'key';
+          let label = k;
+          if (k === '⇧') { btn.classList.add('wide'); label='⇧'; }
+          else if (k === '⌫') { btn.classList.add('wide'); btn.textContent = '⌫'; attachBackspaceHold(btn); container.appendChild(btn); return; } 
+          else if (k === 'فراغ') { btn.classList.add('space'); label='مسافة'; }
+          else if (k === '⏎') { btn.classList.add('enter'); label='⏎'; }
+          else if (diacritics.has(k)) {
+            btn.classList.add('diacritic'); btn.textContent = '\u25CC' + k;
+            btn.addEventListener('click', () => handleKey(k, btn));
+            container.appendChild(btn); return;
+          }
+          btn.textContent = label;
+          btn.addEventListener('click', () => handleKey(k, btn));
+          container.appendChild(btn);
+        });
+      }
+      for (let i = 0; i < rows.length && i < rowEls.length; i++) {
+        buildRow(rowEls[i], rows[i]);
+      }
+
+      document.querySelectorAll('.number-key').forEach(el => {
+        el.addEventListener('click', (e) => {
+          const num = e.target.getAttribute('data-num');
+          if(num) insertAtCursor(num);
+        });
+      });
+
+      function applyFontSize(size) {
+          const keys = document.querySelectorAll('.key');
+          keys.forEach(key => {
+              if(!key.classList.contains('space') && !key.classList.contains('wide') && !key.classList.contains('enter')) {
+                  key.style.fontSize = size + 'px';
+              }
+          });
+          fontValueDisplay.textContent = size + 'px';
+      }
+      
+      fontSlider.addEventListener('input', (e) => {
+          applyFontSize(e.target.value);
+      });
+
+      function insertAtCursor(text) {
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        input.value = input.value.slice(0, start) + text + input.value.slice(end);
+        const newPos = start + text.length;
+        input.selectionStart = input.selectionEnd = newPos;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        updateCustomCursor();
+      }
+
+      function deleteChar() {
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        if (start !== end) {
+          input.value = input.value.slice(0, start) + input.value.slice(end);
+          input.selectionStart = input.selectionEnd = start;
+          updateCustomCursor(); return;
+        }
+        if (start === 0) return;
+        input.value = input.value.slice(0, start - 1) + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start - 1;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        updateCustomCursor();
+      }
+
+      function deleteLastWord() {
+        const text = input.value;
+        if (!text) return;
+        let trimmed = text.trimEnd();
+        let lastSpaceIndex = trimmed.lastIndexOf(' ');
+        let newText;
+        if (lastSpaceIndex === -1) {
+            newText = '';
+        } else {
+            newText = trimmed.substring(0, lastSpaceIndex + 1);
+        }
+        input.value = newText;
+        input.selectionStart = input.selectionEnd = newText.length;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        updateCustomCursor();
+        scheduleAutosave();
+        statusMsg.textContent = 'Last word deleted!';
+        setTimeout(() => statusMsg.textContent = 'جاهز للكتابة', 1500);
+      }
+
+      function handleKey(key, el) {
+        el.classList.add('active');
+        setTimeout(() => el.classList.remove('active'), 90);
+        if (key === 'فراغ') insertAtCursor(' ');
+        else if (key === '⏎') insertAtCursor('\n');
+        else if (key === '⇧') { /* no-op */ }
+        else insertAtCursor(key);
+        scheduleAutosave(); input.focus(); updateCustomCursor();
+      }
+
+      function attachBackspaceHold(btn) {
+        let holdTimer = null, repeatTimer = null, didHold = false;
+        function start(e) { e.preventDefault(); btn.classList.add('active'); didHold = false; holdTimer = setTimeout(() => { didHold = true; repeatTimer = setInterval(() => { deleteChar(); scheduleAutosave(); updateCustomCursor(); }, 90); }, 400); }
+        function stop() { btn.classList.remove('active'); clearTimeout(holdTimer); clearInterval(repeatTimer); if (!didHold) { deleteChar(); scheduleAutosave(); updateCustomCursor(); } input.focus(); }
+        btn.addEventListener('mousedown', start); btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('mouseup', stop); btn.addEventListener('mouseleave', () => { clearTimeout(holdTimer); clearInterval(repeatTimer); btn.classList.remove('active'); });
+        btn.addEventListener('touchend', stop); btn.addEventListener('touchcancel', () => { clearTimeout(holdTimer); clearInterval(repeatTimer); btn.classList.remove('active'); });
+      }
+      input.addEventListener('input', () => { scheduleAutosave(); updateCustomCursor(); });
+
+      let isResizing = false;
+      let startY, startHeight;
+      function initResize(e) {
+          isResizing = true;
+          const touch = e.touches ? e.touches[0] : e;
+          startY = touch.clientY;
+          startHeight = keyboardWrap.offsetHeight;
+          document.body.style.cursor = 'row-resize';
+          e.preventDefault();
+      }
+      function performResize(e) {
+          if (!isResizing) return;
+          const touch = e.touches ? e.touches[0] : e;
+          const deltaY = touch.clientY - startY;
+          let newHeight = Math.min(Math.max(startHeight - deltaY, 150), window.innerHeight * 0.8);
+          keyboardWrap.style.height = newHeight + 'px';
+          e.preventDefault();
+      }
+      function stopResize() {
+          isResizing = false;
+          document.body.style.cursor = 'default';
+      }
+      resizeBar.addEventListener('mousedown', initResize);
+      resizeBar.addEventListener('touchstart', initResize, { passive: false });
+      document.addEventListener('mousemove', performResize);
+      document.addEventListener('touchmove', performResize, { passive: false });
+      document.addEventListener('mouseup', stopResize);
+      document.addEventListener('touchend', stopResize);
+
+      // ================= HANDWRITING (with scroll) =================
+      const ctx = canvas.getContext('2d');
+      let drawing = false;
+      let strokes = [];
+      let fullCanvasHeight = window.innerHeight;
+
+      async function initTesseract() {
+        if(!recognizer) {
+            statusMsg.textContent = "Loading...";
+            try {
+                recognizer = await Tesseract.createWorker('ara', 1, {
+                    logger: m => { if(m.status === 'loading tesseract core') statusMsg.textContent = "Loading OCR..."; }
+                });
+                statusMsg.textContent = "Ready!";
+            } catch (e) {
+                console.error(e);
+                statusMsg.textContent = "Load Error";
+            }
+        }
+      }
+
+      function updateCanvasHeight() {
+        const containerH = container.clientHeight;
+        const currentScrollTop = container.scrollTop;
+        const desiredCanvasH = Math.max(containerH, currentScrollTop + containerH + 200);
+        if (Math.abs(desiredCanvasH - fullCanvasHeight) > 10) {
+          fullCanvasHeight = desiredCanvasH;
+          canvas.height = fullCanvasHeight;
+          redrawStrokes();
+        }
+      }
+
+      function redrawStrokes() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#f2f5f3';
+        strokes.forEach(seg => {
+          if(seg.length === 0) return;
+          ctx.beginPath();
+          ctx.moveTo(seg[0].x, seg[0].y);
+          for (let i = 1; i < seg.length; i++) {
+            ctx.lineTo(seg[i].x, seg[i].y);
+          }
+          ctx.stroke();
+        });
+      }
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        const containerRect = container.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = (touch.clientY - containerRect.top) + container.scrollTop;
+        return { x, y };
+      }
+
+      function startDraw(e) { 
+        e.preventDefault(); 
+        const p = getPos(e); 
+        drawing = true; 
+        strokes.push([{ x: p.x, y: p.y }]); 
+        ctx.beginPath(); 
+        ctx.moveTo(p.x, p.y); 
+      }
+      
+      function draw(e) { 
+        e.preventDefault(); 
+        if (!drawing) return; 
+        const p = getPos(e); 
+        strokes[strokes.length-1].push({ x: p.x, y: p.y }); 
+        ctx.lineTo(p.x, p.y); 
+        ctx.stroke(); 
+      }
+      
+      function endDraw(e) { 
+        e.preventDefault(); 
+        drawing = false; 
+        updateCanvasHeight();
+      }
+
+      function clearStrokes() { 
+        strokes = []; 
+        fullCanvasHeight = container.clientHeight || window.innerHeight;
+        canvas.height = fullCanvasHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        container.scrollTop = 0;
+      }
+
+      function scrollCanvasDown() {
+        const scrollAmount = 400;
+        fullCanvasHeight += scrollAmount;
+        canvas.height = fullCanvasHeight;
+        redrawStrokes();
+        container.scrollTop += scrollAmount;
+        statusMsg.textContent = 'تم التمرير للأسفل ✍️';
+        setTimeout(() => statusMsg.textContent = 'جاهز للكتابة', 1500);
+      }
+
+      async function openHandwriting() {
+        handwritingActive = true; 
+        document.body.classList.add('hw-active');
+        container.classList.add('active');
+        hwToolbar.classList.add('active');
+        hwToggle.classList.add('on');
+        input.blur(); 
+        customCursor.classList.remove('active');
+        
+        container.scrollTop = 0;
+        fullCanvasHeight = container.clientHeight || window.innerHeight;
+        canvas.height = fullCanvasHeight;
+        canvas.width = container.clientWidth - 28;
+        clearStrokes();
+        
+        setTimeout(() => {
+          updateCanvasHeight();
+          redrawStrokes();
+        }, 50);
+        
+        await initTesseract();
+      }
+
+      function closeHandwriting() {
+        handwritingActive = false; 
+        document.body.classList.remove('hw-active');
+        container.classList.remove('active');
+        hwToolbar.classList.remove('active');
+        hwToggle.classList.remove('on');
+        clearStrokes();
+        if (!englishMode) { customCursor.classList.add('active'); updateCustomCursor(); input.focus(); }
+      }
+
+      hwToggle.addEventListener('click', () => { 
+        if (handwritingActive) closeHandwriting(); 
+        else { if(englishMode) kbToggleBtn.click(); openHandwriting(); } 
+      });
+      
+      hwClear.addEventListener('click', clearStrokes);
+      hwClose.addEventListener('click', closeHandwriting);
+      
+      btnDeleteLast.addEventListener('click', () => {
+        strokes.pop(); 
+        redrawStrokes();
+        updateCanvasHeight();
+        statusMsg.textContent = 'آخر خط تم حذفه ✏️';
+        setTimeout(() => statusMsg.textContent = 'جاهز للكتابة', 1500);
+      });
+      
+      btnScrollNow.addEventListener('click', scrollCanvasDown);
+
+      canvas.addEventListener('mousedown', startDraw); 
+      canvas.addEventListener('mousemove', draw); 
+      canvas.addEventListener('mouseup', endDraw); 
+      canvas.addEventListener('mouseleave', endDraw);
+      canvas.addEventListener('touchstart', startDraw, { passive: false }); 
+      canvas.addEventListener('touchmove', draw, { passive: false }); 
+      canvas.addEventListener('touchend', endDraw, { passive: false }); 
+      canvas.addEventListener('touchcancel', endDraw, { passive: false });
+
+      container.addEventListener('scroll', () => {
+        if (handwritingActive) {
+          updateCanvasHeight();
+        }
+      });
+
+      window.addEventListener('resize', () => { 
+        if (handwritingActive) {
+          canvas.width = container.clientWidth - 28;
+          updateCanvasHeight();
+          redrawStrokes();
+        }
+        if (!englishMode && !handwritingActive) updateCustomCursor(); 
+      });
+
+      function initCanvasSize() {
+        canvas.width = container.clientWidth - 28;
+        canvas.height = container.clientHeight;
+        fullCanvasHeight = container.clientHeight;
+        redrawStrokes();
+      }
+      setTimeout(() => {
+        if (handwritingActive) initCanvasSize();
+      }, 100);
+      
+    })();
+
+    // ================= PWA: Service Worker Registration =================
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('Service worker registered:', reg.scope))
+          .catch(err => console.warn('Service worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
