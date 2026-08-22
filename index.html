@@ -49,10 +49,10 @@
       position: relative;
       z-index: 10;
     }
-    .top-bar .icon-btn { background: none; border: none; color: #8fa39a; font-size: 28px; cursor: pointer; line-height: 1; padding: 5px 8px; }
+    .top-bar .icon-btn { background: none; border: none; color: #8fa39a; font-size: 30px; cursor: pointer; line-height: 1; padding: 5px 8px; }
     .top-bar .icon-btn.close { margin-inline-start: auto; }
     .top-bar .input-wrap { flex: 1; min-width: 0; }
-    #titleLabel { font-size: 24px; font-weight: 600; color: #f2f5f3; display: inline-block; padding: 0 4px; }
+    #titleLabel { font-size: 26px; font-weight: 600; color: #f2f5f3; display: inline-block; padding: 0 4px; }
     .top-bar .icon-btn.on { color: #35d68f; }
     .handwrite-toggle {
       background: #1c2b25;
@@ -60,7 +60,7 @@
       color: #8fa39a;
       border-radius: 30px;
       padding: 6px 16px;
-      font-size: 19px;
+      font-size: 21px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -68,7 +68,7 @@
       transition: 0.15s;
     }
     .handwrite-toggle.on { background: #2a3f36; border-color: #35d68f; color: #35d68f; }
-    .handwrite-toggle svg { width: 26px; height: 26px; fill: currentColor; }
+    .handwrite-toggle svg { width: 28px; height: 28px; fill: currentColor; }
     
     .note-area { flex: 1; margin: 0 14px 6px; min-height: 0; display: flex; position: relative; }
     #noteInput {
@@ -81,7 +81,7 @@
       overflow-y: auto;
       color: #f2f5f3;
       font-family: "Scheherazade New", serif;
-      font-size: 44px;
+      font-size: 50px;
       line-height: 1.7;
       padding: 16px 20px;
       caret-color: #35d68f;
@@ -103,7 +103,7 @@
       box-shadow: 0 0 12px #35d68f88;
     }
     @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.1; } }
-    .status-bar { text-align: center; color: #5d7268; font-size: 17px; padding: 3px 0 7px; flex-shrink: 0; }
+    .status-bar { text-align: center; color: #5d7268; font-size: 19px; padding: 3px 0 7px; flex-shrink: 0; }
 
     /* HANDWRITING CONTAINER */
     #handwriteContainer {
@@ -245,7 +245,7 @@
       border-bottom: 1px solid #1c2b25;
       flex-shrink: 0;
     }
-    .font-control label { font-size: 16px; color: #8fa39a; font-weight: bold; min-width: 36px; }
+    .font-control label { font-size: 18px; color: #8fa39a; font-weight: bold; min-width: 40px; }
     .font-control input[type="range"] {
       width: 130px;
       height: 4px;
@@ -271,7 +271,7 @@
       background: #35d68f;
       cursor: pointer;
     }
-    .font-control span { font-size: 16px; color: #f2f5f3; min-width: 32px; text-align: center; }
+    .font-control span { font-size: 18px; color: #f2f5f3; min-width: 36px; text-align: center; }
 
     .keyboard {
       flex: 1;
@@ -304,12 +304,11 @@
     .number-key {
       background: transparent;
       color: #5d7268;
-      font-size: 16px;
+      font-size: 19px;
       font-weight: bold;
-      height: 26px;
-      flex: 0 0 40px;
-      max-width: 48px;
-      min-width: 32px;
+      height: 28px;
+      flex: 1 1 0;
+      min-width: 0;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -326,21 +325,20 @@
       align-items: center;
       justify-content: center;
       color: #f2f5f3;
-      font-size: 29px;
-      height: 52px;
-      flex: 1 0 34px;
-      min-width: 36px;
-      max-width: 54px;
+      font-size: 34px;
+      height: 56px;
+      flex: 1 1 0;
+      min-width: 0;
       cursor: pointer;
       box-shadow: 0 1px 0 rgba(0,0,0,0.4);
       transition: background 0.06s ease, transform 0.05s ease;
       touch-action: manipulation;
     }
     .key:active, .key.active { background: #2a3f36; transform: scale(0.94); }
-    .key.wide { max-width: 82px; font-size: 20px; color: #8fa39a; min-width: 56px; flex: 0 1 76px;}
-    .key.diacritic { font-size: 31px; font-weight: 700; color: #f2f5f3; max-width: 46px; flex: 0 1 38px;}
-    .key.space { max-width: none; flex: 4 1 150px !important; font-size: 18px; color: #8fa39a; }
-    .key.enter { max-width: 66px; background: #35d68f; color: #04140c; font-weight: 700; font-size: 18px; flex: 0 1 60px;}
+    .key.wide { flex: 1.5 1 0; font-size: 22px; color: #8fa39a; }
+    .key.diacritic { font-size: 36px; font-weight: 700; color: #f2f5f3; flex: 0.85 1 0; }
+    .key.space { flex: 6 1 0 !important; font-size: 20px; color: #8fa39a; }
+    .key.enter { flex: 1.2 1 0; background: #35d68f; color: #04140c; font-weight: 700; font-size: 20px; }
   </style>
 </head>
 <body>
@@ -384,8 +382,8 @@
     
     <div class="font-control">
       <label>Size</label>
-      <input type="range" id="fontSlider" min="18" max="48" value="29" step="1">
-      <span id="fontValueDisplay">29px</span>
+      <input type="range" id="fontSlider" min="20" max="52" value="34" step="1">
+      <span id="fontValueDisplay">34px</span>
     </div>
 
     <div class="keyboard" id="keyboard">
