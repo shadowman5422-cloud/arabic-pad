@@ -1,4 +1,4 @@
-const CACHE_NAME = 'notepad-cache-v1';
+const CACHE_NAME = 'notepad-cache-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -8,11 +8,24 @@ const ASSETS_TO_CACHE = [
   './icons/apple-touch-icon.png'
 ];
 
-// Install: cache the app shell
+// Install: cache each asset individually so one bad path doesn't
+// break caching for everything else (cache.addAll is atomic and
+// was silently failing the whole install if any single file 404'd).
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(
+        ASSETS_TO_CACHE.map((url) =>
+          fetch(url, { cache: 'reload' })
+            .then((res) => {
+              if (res.ok) return cache.put(url, res);
+              console.warn('[sw] skipped (bad response):', url, res.status);
+            })
+            .catch((err) => console.warn('[sw] skipped (fetch failed):', url, err))
+        )
+      )
+    )
   );
 });
 
@@ -35,6 +48,19 @@ self.addEventListener('fetch', (event) => {
 
   // Only handle GET requests
   if (req.method !== 'GET') return;
+
+  // Page navigations: try cache first so a full offline reload still opens the app
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      caches.match('./index.html').then((cached) => {
+        return (
+          cached ||
+          fetch(req).catch(() => caches.match('./index.html'))
+        );
+      })
+    );
+    return;
+  }
 
   // App shell files: cache-first
   if (url.origin === self.location.origin) {
